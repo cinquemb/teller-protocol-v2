@@ -7,3 +7,6 @@
 [submodule "packages/services/graph-node"]
 	path = packages/services/graph-node
 	url = git@github.com:teller-protocol/graph-node.git
+[submodule "packages/contracts/lib/openzeppelin-contracts"]
+	path = packages/contracts/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
