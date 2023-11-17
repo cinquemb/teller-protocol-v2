@@ -224,7 +224,7 @@ contract LenderCommitmentForwarder_G2 is
         commitments[_commitmentId] = _commitment;
 
         //make sure the commitment data still adheres to required specifications and limits
-        validateCommitment(commitments[_commitmentId], commitmentId_);
+        validateCommitment(commitments[_commitmentId], _commitmentId);
 
         emit UpdatedCommitment(
             _commitmentId,
@@ -481,7 +481,7 @@ contract LenderCommitmentForwarder_G2 is
         CommitmentCollateral storage commitmentCollateral = commitmentsCollateral[_commitmentId];
 
         //make sure the commitment data adheres to required specifications and limits
-        validateCommitment(commitment, commitmentId_);
+        validateCommitment(commitment, _commitmentId);
 
         //the collateral token of the commitment should be the same as the acceptor expects
         require(
