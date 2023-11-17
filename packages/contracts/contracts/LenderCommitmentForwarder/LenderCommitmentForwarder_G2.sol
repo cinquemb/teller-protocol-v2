@@ -32,6 +32,7 @@ contract LenderCommitmentForwarder_G2 is
         internal commitmentBorrowersList;
 
     mapping(uint256 => uint256) public commitmentPrincipalAccepted;
+    mapping(uint256 => CommitmentCollateral) commitmentsCollateral;
 
     /**
      * @notice This event is emitted when a lender's commitment is created.
@@ -106,7 +107,8 @@ contract LenderCommitmentForwarder_G2 is
         _;
     }
 
-    function validateCommitment(Commitment storage _commitment) internal {
+
+    function validateCommitment(Commitment storage _commitment, uint256 commitmentId_) internal {
         require(
             _commitment.expiration > uint32(block.timestamp),
             "expired commitment"
@@ -116,20 +118,40 @@ contract LenderCommitmentForwarder_G2 is
             "commitment principal allocation 0"
         );
 
-        if (_commitment.collateralTokenType != CommitmentCollateralType.NONE) {
-            require(
-                _commitment.maxPrincipalPerCollateralAmount > 0,
-                "commitment collateral ratio 0"
-            );
+        uint256 cLen =  _commitment.collateralTokenAddress.length;
 
-            if (
-                _commitment.collateralTokenType ==
-                CommitmentCollateralType.ERC20
-            ) {
+        require(
+            _commitment.minInterestRate.length == cLen &&
+            _commitment.collateralTokenId.length == cLen &&
+            _commitment.maxPrincipalPerCollateralAmount.length == cLen &&
+            _commitment.collateralTokenType.length == cLen,
+            "collateral dim mismatch"
+        );
+
+        for (uint i=0; i<cLen; i++){
+            address cAddr = _commitment.collateralTokenAddress[i];
+
+            if (_commitment.collateralTokenType[i] != CommitmentCollateralType.NONE) {
                 require(
-                    _commitment.collateralTokenId == 0,
-                    "commitment collateral token id must be 0 for ERC20"
+                    _commitment.maxPrincipalPerCollateralAmount[i] > 0,
+                    "commitment collateral ratio 0"
                 );
+
+                if (
+                    _commitment.collateralTokenType[i] ==
+                    CommitmentCollateralType.ERC20
+                ) {
+                    require(
+                        _commitment.collateralTokenId[i] == 0,
+                        "commitment collateral token id must be 0 for ERC20"
+                    );
+                }
+
+                commitmentsCollateral[commitmentId_].collateralTokenAddress[cAddr] = cAddr;
+                commitmentsCollateral[commitmentId_].minInterestRate[cAddr] = _commitment.minInterestRate[i];
+                commitmentsCollateral[commitmentId_].collateralTokenId[cAddr] = _commitment.collateralTokenId[i];
+                commitmentsCollateral[commitmentId_].maxPrincipalPerCollateralAmount[cAddr] = _commitment.maxPrincipalPerCollateralAmount[i];
+                commitmentsCollateral[commitmentId_].collateralTokenType[cAddr] = _commitment.collateralTokenType[i];
             }
         }
     }
@@ -161,7 +183,7 @@ contract LenderCommitmentForwarder_G2 is
         commitments[commitmentId_] = _commitment;
 
         //make sure the commitment data adheres to required specifications and limits
-        validateCommitment(commitments[commitmentId_]);
+        validateCommitment(commitments[commitmentId_], commitmentId_);
 
         //the borrower allowlists is in a different storage space so we append them to the array with this method s
         _addBorrowersToCommitmentAllowlist(commitmentId_, _borrowerAddressList);
@@ -202,7 +224,7 @@ contract LenderCommitmentForwarder_G2 is
         commitments[_commitmentId] = _commitment;
 
         //make sure the commitment data still adheres to required specifications and limits
-        validateCommitment(commitments[_commitmentId]);
+        validateCommitment(commitments[_commitmentId], commitmentId_);
 
         emit UpdatedCommitment(
             _commitmentId,
@@ -307,7 +329,7 @@ contract LenderCommitmentForwarder_G2 is
         uint32 _loanDuration
     ) public returns (uint256 bidId) {
         require(
-            commitments[_commitmentId].collateralTokenType <=
+            commitmentsCollateral[_commitmentId].collateralTokenType[_collateralTokenAddress] <=
                 CommitmentCollateralType.ERC1155_ANY_ID,
             "Invalid commitment collateral type"
         );
@@ -373,15 +395,15 @@ contract LenderCommitmentForwarder_G2 is
         bytes32[] calldata _merkleProof
     ) public returns (uint256 bidId) {
         require(
-            commitments[_commitmentId].collateralTokenType ==
+            commitmentsCollateral[_commitmentId].collateralTokenType[_collateralTokenAddress] ==
                 CommitmentCollateralType.ERC721_MERKLE_PROOF ||
-                commitments[_commitmentId].collateralTokenType ==
+                commitmentsCollateral[_commitmentId].collateralTokenType[_collateralTokenAddress] ==
                 CommitmentCollateralType.ERC1155_MERKLE_PROOF,
             "Invalid commitment collateral type"
         );
 
         bytes32 _merkleRoot = bytes32(
-            commitments[_commitmentId].collateralTokenId
+            commitmentsCollateral[_commitmentId].collateralTokenId[_collateralTokenAddress]
         );
         bytes32 _leaf = keccak256(abi.encodePacked(_collateralTokenId));
 
@@ -456,18 +478,19 @@ contract LenderCommitmentForwarder_G2 is
         uint32 _loanDuration
     ) internal returns (uint256 bidId) {
         Commitment storage commitment = commitments[_commitmentId];
+        CommitmentCollateral storage commitmentCollateral = commitmentsCollateral[_commitmentId];
 
         //make sure the commitment data adheres to required specifications and limits
-        validateCommitment(commitment);
+        validateCommitment(commitment, commitmentId_);
 
         //the collateral token of the commitment should be the same as the acceptor expects
         require(
-            _collateralTokenAddress == commitment.collateralTokenAddress,
+            _collateralTokenAddress == commitmentCollateral.collateralTokenAddress[_collateralTokenAddress],
             "Mismatching collateral token"
         );
         //the interest rate must be at least as high has the commitment demands. The borrower can use a higher interest rate although that would not be beneficial to the borrower.
         require(
-            _interestRate >= commitment.minInterestRate,
+            _interestRate >= commitmentCollateral.minInterestRate[_collateralTokenAddress],
             "Invalid interest rate"
         );
         //the loan duration must be less than the commitment max loan duration. The lender who made the commitment expects the money to be returned before this window.
@@ -496,9 +519,9 @@ contract LenderCommitmentForwarder_G2 is
 
         uint256 requiredCollateral = getRequiredCollateral(
             _principalAmount,
-            commitment.maxPrincipalPerCollateralAmount,
-            commitment.collateralTokenType,
-            commitment.collateralTokenAddress,
+            commitmentCollateral.maxPrincipalPerCollateralAmount[_collateralTokenAddress],
+            commitmentCollateral.collateralTokenType[_collateralTokenAddress],
+            commitmentCollateral.collateralTokenAddress[_collateralTokenAddress],
             commitment.principalTokenAddress
         );
 
@@ -511,10 +534,10 @@ contract LenderCommitmentForwarder_G2 is
 
         //ERC721 assets must have a quantity of 1
         if (
-            commitment.collateralTokenType == CommitmentCollateralType.ERC721 ||
-            commitment.collateralTokenType ==
+            commitmentCollateral.collateralTokenType[_collateralTokenAddress] == CommitmentCollateralType.ERC721 ||
+            commitmentCollateral.collateralTokenType[_collateralTokenAddress] ==
             CommitmentCollateralType.ERC721_ANY_ID ||
-            commitment.collateralTokenType ==
+            commitmentCollateral.collateralTokenType[_collateralTokenAddress] ==
             CommitmentCollateralType.ERC721_MERKLE_PROOF
         ) {
             require(
@@ -525,11 +548,11 @@ contract LenderCommitmentForwarder_G2 is
 
         //ERC721 and ERC1155 types strictly enforce a specific token Id.  ERC721_ANY and ERC1155_ANY do not.
         if (
-            commitment.collateralTokenType == CommitmentCollateralType.ERC721 ||
-            commitment.collateralTokenType == CommitmentCollateralType.ERC1155
+            commitmentCollateral.collateralTokenType[_collateralTokenAddress] == CommitmentCollateralType.ERC721 ||
+            commitmentCollateral.collateralTokenType[_collateralTokenAddress] == CommitmentCollateralType.ERC1155
         ) {
             require(
-                commitment.collateralTokenId == _collateralTokenId,
+                commitmentCollateral.collateralTokenId[_collateralTokenAddress] == _collateralTokenId,
                 "invalid commitment collateral tokenId"
             );
         }
@@ -549,15 +572,15 @@ contract LenderCommitmentForwarder_G2 is
         createLoanArgs.duration = _loanDuration;
         createLoanArgs.interestRate = _interestRate;
         createLoanArgs.recipient = _recipient;
-        if (commitment.collateralTokenType != CommitmentCollateralType.NONE) {
+        if (commitmentCollateral.collateralTokenType[_collateralTokenAddress] != CommitmentCollateralType.NONE) {
             createLoanArgs.collateral = new Collateral[](1);
             createLoanArgs.collateral[0] = Collateral({
                 _collateralType: _getEscrowCollateralType(
-                    commitment.collateralTokenType
+                    commitmentCollateral.collateralTokenType[_collateralTokenAddress]
                 ),
                 _tokenId: _collateralTokenId,
                 _amount: _collateralAmount,
-                _collateralAddress: commitment.collateralTokenAddress
+                _collateralAddress: commitmentCollateral.collateralTokenAddress[_collateralTokenAddress]
             });
         }
 

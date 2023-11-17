@@ -30,14 +30,27 @@ interface ILenderCommitmentForwarder {
         uint256 maxPrincipal;
         uint32 expiration;
         uint32 maxDuration;
-        uint16 minInterestRate;
-        address collateralTokenAddress;
-        uint256 collateralTokenId; //we use this for the MerkleRootHash  for type ERC721_MERKLE_PROOF
-        uint256 maxPrincipalPerCollateralAmount;
-        CommitmentCollateralType collateralTokenType;
+        uint16[] minInterestRate;
+        address[] collateralTokenAddress;
+        uint256[] collateralTokenId; //we use this for the MerkleRootHash  for type ERC721_MERKLE_PROOF
+        uint256[] maxPrincipalPerCollateralAmount;
+        CommitmentCollateralType[] collateralTokenType;
         address lender;
         uint256 marketId;
         address principalTokenAddress;
+    }
+
+    /*
+
+        Info stored here is duplicated in the orinal commitment, but this makes it easy for look ups when accepting commitments
+    */
+
+    struct CommitmentCollateral {
+        mapping(address => address) collateralTokenAddress;
+        mapping(address => uint16) minInterestRate;
+        mapping(address => uint256) collateralTokenId;//we use this for the MerkleRootHash 
+        mapping(address => uint256) maxPrincipalPerCollateralAmount;
+        mapping(address => CommitmentCollateralType) collateralTokenType;
     }
 
     // mapping(uint256 => Commitment) public commitments;
