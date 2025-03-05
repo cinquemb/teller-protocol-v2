@@ -357,6 +357,20 @@
     },
     {
       "type": "function",
+      "name": "MAX_MARKET_FEE_PERCENT",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "uint256",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
       "name": "attestBorrower",
       "constant": false,
       "payable": false,
@@ -1093,64 +1107,6 @@
     },
     {
       "type": "function",
-      "name": "revokeBorrower",
-      "constant": false,
-      "payable": false,
-      "inputs": [
-        {
-          "type": "uint256",
-          "name": "_marketId"
-        },
-        {
-          "type": "address",
-          "name": "_borrowerAddress"
-        },
-        {
-          "type": "uint8",
-          "name": "_v"
-        },
-        {
-          "type": "bytes32",
-          "name": "_r"
-        },
-        {
-          "type": "bytes32",
-          "name": "_s"
-        }
-      ],
-      "outputs": []
-    },
-    {
-      "type": "function",
-      "name": "revokeLender",
-      "constant": false,
-      "payable": false,
-      "inputs": [
-        {
-          "type": "uint256",
-          "name": "_marketId"
-        },
-        {
-          "type": "address",
-          "name": "_lenderAddress"
-        },
-        {
-          "type": "uint8",
-          "name": "_v"
-        },
-        {
-          "type": "bytes32",
-          "name": "_r"
-        },
-        {
-          "type": "bytes32",
-          "name": "_s"
-        }
-      ],
-      "outputs": []
-    },
-    {
-      "type": "function",
       "name": "revokeLender",
       "constant": false,
       "payable": false,
@@ -1429,6 +1385,6 @@
     "blockHash": "0x755190002953b15297a5d8e05bd5cb1eca099c00c2b70fcbc5123a3de07789c4",
     "blockNumber": 2935397
   },
-  "numDeployments": 1,
+  "numDeployments": 2,
   "implementation": "0x4B4B129FD2c40e1b05D4378F751B93Df6173A16C"
 }

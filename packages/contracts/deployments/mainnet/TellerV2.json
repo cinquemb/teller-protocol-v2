@@ -49,6 +49,16 @@
       ]
     },
     {
+      "type": "error",
+      "name": "SafeERC20FailedOperation",
+      "inputs": [
+        {
+          "type": "address",
+          "name": "token"
+        }
+      ]
+    },
+    {
       "type": "event",
       "anonymous": false,
       "name": "AcceptedBid",
@@ -108,6 +118,18 @@
           "type": "uint8",
           "name": "version",
           "indexed": false
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "LoanClosed",
+      "inputs": [
+        {
+          "type": "uint256",
+          "name": "bidId",
+          "indexed": true
         }
       ]
     },
@@ -228,18 +250,6 @@
     {
       "type": "event",
       "anonymous": false,
-      "name": "Paused",
-      "inputs": [
-        {
-          "type": "address",
-          "name": "account",
-          "indexed": false
-        }
-      ]
-    },
-    {
-      "type": "event",
-      "anonymous": false,
       "name": "ProtocolFeeSet",
       "inputs": [
         {
@@ -299,18 +309,6 @@
         {
           "type": "address",
           "name": "sender",
-          "indexed": false
-        }
-      ]
-    },
-    {
-      "type": "event",
-      "anonymous": false,
-      "name": "Unpaused",
-      "inputs": [
-        {
-          "type": "address",
-          "name": "account",
           "indexed": false
         }
       ]
@@ -790,6 +788,20 @@
     },
     {
       "type": "function",
+      "name": "getEscrowVault",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "address",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
       "name": "getLoanBorrower",
       "constant": true,
       "stateMutability": "view",
@@ -804,6 +816,25 @@
         {
           "type": "address",
           "name": "borrower_"
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "getLoanDefaultTimestamp",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "uint256",
+          "name": "_bidId"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "uint256",
+          "name": ""
         }
       ]
     },
@@ -913,7 +944,35 @@
     },
     {
       "type": "function",
-      "name": "getMetadataURI",
+      "name": "getProtocolFeeRecipient",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "address",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "getProtocolPausingManager",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "address",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "getRepaymentListenerForBid",
       "constant": true,
       "stateMutability": "view",
       "payable": false,
@@ -925,8 +984,8 @@
       ],
       "outputs": [
         {
-          "type": "string",
-          "name": "metadataURI_"
+          "type": "address",
+          "name": ""
         }
       ]
     },
@@ -990,6 +1049,10 @@
         {
           "type": "address",
           "name": "_escrowVault"
+        },
+        {
+          "type": "address",
+          "name": "_protocolPausingManager"
         }
       ],
       "outputs": []
@@ -1172,6 +1235,23 @@
     },
     {
       "type": "function",
+      "name": "lenderCloseLoanWithRecipient",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "uint256",
+          "name": "_bidId"
+        },
+        {
+          "type": "address",
+          "name": "_collateralRecipient"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
       "name": "lenderCommitmentForwarder",
       "constant": true,
       "stateMutability": "view",
@@ -1236,6 +1316,23 @@
     },
     {
       "type": "function",
+      "name": "liquidateLoanFullWithRecipient",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "uint256",
+          "name": "_bidId"
+        },
+        {
+          "type": "address",
+          "name": "_recipient"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
       "name": "marketOwnerCancelBid",
       "constant": false,
       "payable": false,
@@ -1271,28 +1368,6 @@
       "outputs": [
         {
           "type": "address",
-          "name": ""
-        }
-      ]
-    },
-    {
-      "type": "function",
-      "name": "pauseProtocol",
-      "constant": false,
-      "payable": false,
-      "inputs": [],
-      "outputs": []
-    },
-    {
-      "type": "function",
-      "name": "paused",
-      "constant": true,
-      "stateMutability": "view",
-      "payable": false,
-      "inputs": [],
-      "outputs": [
-        {
-          "type": "bool",
           "name": ""
         }
       ]
@@ -1411,6 +1486,25 @@
     },
     {
       "type": "function",
+      "name": "repaymentListenerForBid",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "uint256",
+          "name": ""
+        }
+      ],
+      "outputs": [
+        {
+          "type": "address",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
       "name": "reputationManager",
       "constant": true,
       "stateMutability": "view",
@@ -1425,19 +1519,6 @@
     },
     {
       "type": "function",
-      "name": "setEscrowVault",
-      "constant": false,
-      "payable": false,
-      "inputs": [
-        {
-          "type": "address",
-          "name": "_escrowVault"
-        }
-      ],
-      "outputs": []
-    },
-    {
-      "type": "function",
       "name": "setProtocolFee",
       "constant": false,
       "payable": false,
@@ -1445,6 +1526,49 @@
         {
           "type": "uint16",
           "name": "newFee"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "setProtocolFeeRecipient",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "address",
+          "name": "_recipient"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "setProtocolPausingManager",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "address",
+          "name": "_protocolPausingManager"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "setRepaymentListenerForBid",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "uint256",
+          "name": "_bidId"
+        },
+        {
+          "type": "address",
+          "name": "_listener"
         }
       ],
       "outputs": []
@@ -1606,14 +1730,6 @@
     },
     {
       "type": "function",
-      "name": "unpauseProtocol",
-      "constant": false,
-      "payable": false,
-      "inputs": [],
-      "outputs": []
-    },
-    {
-      "type": "function",
       "name": "uris",
       "constant": true,
       "stateMutability": "view",
@@ -1689,6 +1805,6 @@
     "status": 1,
     "byzantium": true
   },
-  "numDeployments": 14,
+  "numDeployments": 15,
   "implementation": "0x6BBf498C429C51d05bcA3fC67D2C720B15FC73B8"
 }

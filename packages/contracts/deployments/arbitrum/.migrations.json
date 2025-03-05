@@ -17,5 +17,22 @@
   "lender-commitment-forwarder:staging:deploy": 1695676165,
   "lender-commitment-forwarder:extensions:flash-rollover:deploy": 1695676174,
   "teller-v2:loan-liquidated-state-upgrade": 1695676183,
-  "lender-commitment-forwarder:extensions:flash-rollover:g3-upgrade": 1696625803
+  "teller-v2:loan-defaulted-state-upgrade": 1695676184,
+  "lender-commitment-forwarder:extensions:flash-rollover:g3-upgrade": 1696625803,
+  "lender-commitment-forwarder:extensions:flash-rollover:g4-upgrade": 1696625804,
+  "lender-commitment-forwarder:alpha:deploy": 1709062560,
+  "lender-commitment-forwarder:alpha:upgrade": 1710880450,
+  "lender-commitment-forwarder:extensions:loan-referral-forwarder:deploy": 1724269536,
+  "lender-commitment-forwarder:alpha:upgrade_referrals": 1724423905,
+  "loan-referral-forwarder:upgrade_1": 1729703402,
+  "smart-commitment-forwarder:deploy": 1736265863,
+  "lender-commitment-group-beacon:deploy": 1736265868,
+  "lender-commitment-group-factory:deploy": 1736265872,
+  "protocol-pausing-manager:deploy": 1736265876,
+  "hypernative-oracle-mock:deploy": 1736266019,
+  "lender-commitment-forwarder:alpha:upgrade_max_principal": 1736266028,
+  "lender-groups:upgrade": 1736266039,
+  "validate-deployments": 1736279726,
+  "lender-commitment-forwarder:extensions:flash-rollover-widget:deploy": 1736288990,
+  "lender-commitment-forwarder:extensions:flash-swap-rollover:deploy": 1741031133
 }

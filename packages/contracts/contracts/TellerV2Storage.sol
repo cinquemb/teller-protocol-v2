@@ -158,4 +158,17 @@ abstract contract TellerV2Storage_G5 is TellerV2Storage_G4 {
     IEscrowVault public escrowVault;
 }
 
-abstract contract TellerV2Storage is TellerV2Storage_G5 {}
+abstract contract TellerV2Storage_G6 is TellerV2Storage_G5 {
+    mapping(uint256 => address) public repaymentListenerForBid;
+}
+
+abstract contract TellerV2Storage_G7 is TellerV2Storage_G6 {
+    mapping(address => bool) private  __pauserRoleBearer;
+    bool private __liquidationsPaused; 
+}
+
+abstract contract TellerV2Storage_G8 is TellerV2Storage_G7 {
+    address  protocolFeeRecipient;  
+}
+
+abstract contract TellerV2Storage is TellerV2Storage_G8 {}

@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 import { Testable } from "../../../Testable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import { FlashRolloverLoan } from "../../../../contracts/LenderCommitmentForwarder/extensions/FlashRolloverLoan.sol";
+import { FlashRolloverLoan } from "../../../../contracts/LenderCommitmentForwarder/extensions/rollover/FlashRolloverLoan.sol";
 
 import "../../../../contracts/interfaces/ILenderCommitmentForwarder.sol";
 import "../../../../contracts/interfaces/IFlashRolloverLoan.sol";
@@ -19,8 +19,8 @@ import { MarketRegistryMock } from "../../../../contracts/mock/MarketRegistryMoc
 import { AavePoolAddressProviderMock } from "../../../../contracts/mock/aave/AavePoolAddressProviderMock.sol";
 import { AavePoolMock } from "../../../../contracts/mock/aave/AavePoolMock.sol";
 
-import { FlashRolloverLoan_G1 } from "../../../../contracts/LenderCommitmentForwarder/extensions/FlashRolloverLoan_G1.sol";
-import { FlashRolloverLoan_G2 } from "../../../../contracts/LenderCommitmentForwarder/extensions/FlashRolloverLoan_G2.sol";
+import { FlashRolloverLoan_G1 } from "../../../../contracts/LenderCommitmentForwarder/extensions/rollover/FlashRolloverLoan_G1.sol";
+import { FlashRolloverLoan_G2 } from "../../../../contracts/LenderCommitmentForwarder/extensions/rollover/FlashRolloverLoan_G2.sol";
 
 contract FlashRolloverLoanOverride is FlashRolloverLoan_G2 {
     constructor(

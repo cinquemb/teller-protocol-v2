@@ -723,7 +723,20 @@ extendEnvironment((hre) => {
 
 async function getOZNetwork(hre: HardhatRuntimeEnvironment): Promise<Network> {
   const chainId = await hre.getChainId()
-  const network = fromChainId(Number(chainId))
+  const network = fromChainId(Number(chainId))  
+
+  // network is just a string like 'mainnet' 
+
+  if (chainId == '100000001' ){
+    console.log("detected custom  fork network ", "lg-fork-deploy-3")
+    return 'lg-fork-deploy-3'  //the name of the fork network in OZ Defender 
+  }
+
+  if (chainId == '100000002' ){
+    console.log("detected custom  fork network ", "lg-fork-deploy-3")
+    return 'lg-fork-deploy-4'  //the name of the fork network in OZ Defender 
+  }
+
   if (!network) throw new Error(`Unknown chain id ${chainId}`)
   return network
 }

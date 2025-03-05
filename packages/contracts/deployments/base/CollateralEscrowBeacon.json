@@ -321,9 +321,30 @@
         }
       ],
       "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "withdrawDustTokens",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "address",
+          "name": "tokenAddress"
+        },
+        {
+          "type": "uint256",
+          "name": "amount"
+        },
+        {
+          "type": "address",
+          "name": "recipient"
+        }
+      ],
+      "outputs": []
     }
   ],
   "receipt": {},
-  "numDeployments": 1,
+  "numDeployments": 2,
   "implementation": "0xfF5c6530d761aB1Fa5E78e70C791A260Cfe85FbC"
 }

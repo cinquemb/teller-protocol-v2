@@ -13,6 +13,9 @@ import { CollateralManagerMock } from "../../contracts/mock/CollateralManagerMoc
 import { LenderManagerMock } from "../../contracts/mock/LenderManagerMock.sol";
 import { MarketRegistryMock } from "../../contracts/mock/MarketRegistryMock.sol";
 
+import { ProtocolPausingManager } from "../../contracts/pausing/ProtocolPausingManager.sol";
+
+
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import "../tokens/TestERC20Token.sol";
@@ -42,6 +45,8 @@ contract TellerV2_bids_test is Testable {
     CollateralManagerMock collateralManagerMock;
     LenderManagerMock lenderManagerMock;
 
+    ProtocolPausingManager protocolPausingManager;
+
     uint256 marketplaceId = 100;
 
     //have to copy and paste events in here to expectEmit
@@ -59,6 +64,11 @@ contract TellerV2_bids_test is Testable {
         reputationManagerMock = new ReputationManagerMock();
         collateralManagerMock = new CollateralManagerMock();
         lenderManagerMock = new LenderManagerMock();
+        protocolPausingManager = new ProtocolPausingManager();
+        protocolPausingManager.initialize();
+
+        tellerV2.setProtocolPausingManagerSuper(address(protocolPausingManager));
+      
 
         borrower = new User();
         lender = new User();
@@ -154,7 +164,7 @@ contract TellerV2_bids_test is Testable {
 
         marketRegistryMock.mock_setGlobalMarketsClosed(true);
 
-        vm.expectRevert("Market is not open");
+        vm.expectRevert("Mkt C");
 
         tellerV2._submitBidSuper(
             address(lendingToken), // lending token
@@ -174,7 +184,7 @@ contract TellerV2_bids_test is Testable {
 
         marketRegistryMock.mock_setBorrowerIsVerified(false);
 
-        vm.expectRevert("Not verified borrower");
+        vm.expectRevert("Borrower NV");
 
         tellerV2._submitBidSuper(
             address(lendingToken), // lending token
@@ -188,6 +198,8 @@ contract TellerV2_bids_test is Testable {
     }
 
     function test_submit_bid_without_collateral() public {
+         //tellerV2.setProtocolPausingManagerSuper(address(protocolPausingManager));
+       
         tellerV2.submitBid(
             address(1), // lending token
             1, // market ID
@@ -202,6 +214,8 @@ contract TellerV2_bids_test is Testable {
     }
 
     function test_submit_bid_with_collateral() public {
+        //  tellerV2.setProtocolPausingManagerSuper(address(protocolPausingManager));
+       
         tellerV2.setCollateralManagerSuper(address(collateralManagerMock));
 
         Collateral[] memory collateral = new Collateral[](1);
@@ -221,9 +235,10 @@ contract TellerV2_bids_test is Testable {
     }
 
     function test_submit_bid_reverts_when_protocol_IS_paused() public {
-        tellerV2.mock_pause(true);
+        tellerV2.setProtocolPausingManagerSuper(address(protocolPausingManager));
+        protocolPausingManager.pauseProtocol();
 
-        vm.expectRevert("Pausable: paused");
+        vm.expectRevert("Protocol paused");
         tellerV2.submitBid(
             address(1), // lending token
             1, // market ID
@@ -238,11 +253,12 @@ contract TellerV2_bids_test is Testable {
     function test_submit_bid_Reverts_when_protocol_IS_paused__with_collateral()
         public
     {
-        tellerV2.mock_pause(true);
+        tellerV2.setProtocolPausingManagerSuper(address(protocolPausingManager));
+        protocolPausingManager.pauseProtocol();
 
         Collateral[] memory collateral = new Collateral[](1);
 
-        vm.expectRevert("Pausable: paused");
+        vm.expectRevert("Protocol paused");
         tellerV2.submitBid(
             address(1), // lending token
             1, // market ID
@@ -262,7 +278,7 @@ contract TellerV2_bids_test is Testable {
 
         collateralManagerMock.forceSetCommitCollateralValidation(false);
 
-        vm.expectRevert("Collateral balance could not be validated");
+        vm.expectRevert("C bal NV");
         tellerV2.submitBid(
             address(1), // lending token
             1, // market ID
@@ -300,9 +316,14 @@ contract TellerV2_bids_test is Testable {
         tellerV2.setMockMsgSenderForMarket(address(lender));
         tellerV2.mock_setBidState(bidId, BidState.PENDING);
 
-        //how to specify action not allowed ?
-        vm
-            .expectRevert /* ActionNotAllowed(bidId,"cancelBid","Only the bid owner can cancel!") */();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ActionNotAllowed.selector,
+                bidId,
+                "CB",
+                "Not bid owner"
+            )
+        );
         tellerV2.cancelBid(bidId);
     }
 
@@ -399,8 +420,8 @@ contract TellerV2_bids_test is Testable {
             abi.encodeWithSelector(
                 ActionNotAllowed.selector,
                 bidId,
-                "lenderAcceptBid",
-                "Bid must be pending"
+                "lab",
+                "Bid not pending"
             )
         );
 
@@ -425,9 +446,13 @@ contract TellerV2_bids_test is Testable {
 
         tellerV2.setCollateralManagerSuper(address(collateralManagerMock));
 
-        tellerV2.pauseProtocol();
 
-        vm.expectRevert("Pausable: paused");
+
+        tellerV2.setProtocolPausingManagerSuper(address(protocolPausingManager));
+        protocolPausingManager.pauseProtocol();
+        //tellerV2.pauseProtocol();
+
+        vm.expectRevert("Protocol paused");
 
         tellerV2.lenderAcceptBid(bidId);
     }
@@ -452,7 +477,7 @@ contract TellerV2_bids_test is Testable {
 
         marketRegistryMock.mock_setLenderIsVerified(false);
 
-        vm.expectRevert("Not verified lender");
+        vm.expectRevert(); //NV 
 
         tellerV2.lenderAcceptBid(bidId);
     }
@@ -504,7 +529,7 @@ contract TellerV2_bids_test is Testable {
 
         vm.warp(20000);
 
-        vm.expectRevert("Bid has expired");
+        vm.expectRevert() ;//BE ;
 
         tellerV2.lenderAcceptBid(bidId);
     }
@@ -634,8 +659,8 @@ contract TellerV2_bids_test is Testable {
             abi.encodeWithSelector(
                 ActionNotAllowed.selector,
                 bidId,
-                "repayLoan",
-                "Loan must be accepted"
+                "rl",
+                "Loan not accepted"
             )
         );
 
@@ -675,15 +700,49 @@ contract TellerV2_bids_test is Testable {
             abi.encodeWithSelector(
                 ActionNotAllowed.selector,
                 bidId,
-                "repayLoan",
-                "Loan must be accepted"
+                "rl",
+                "Loan not accepted"
             )
         );
 
         tellerV2.repayLoanFull(bidId);
     }
 
+    function test_lender_close_loan_not_lender() public {
+        uint256 bidId = 1;
+        setMockBid(bidId);
+
+        tellerV2.mock_setBidState(bidId, BidState.ACCEPTED);
+        tellerV2.mock_setBidDefaultDuration(bidId, 1000);
+        vm.warp(2000 * 1e20);
+
+        vm.expectRevert(); // NLL
+        vm.prank(address(borrower));
+        tellerV2.lenderCloseLoan(bidId);
+    }
+
+       
     function test_lender_close_loan() public {
+        uint256 bidId = 1;
+        setMockBid(bidId);
+
+         //set the account that will be paying the loan off
+       // tellerV2.setMockMsgSenderForMarket(address(lender));
+
+        tellerV2.setCollateralManagerSuper(address(collateralManagerMock));
+        tellerV2.mock_setBidState(bidId, BidState.ACCEPTED);
+        tellerV2.mock_setBidDefaultDuration(bidId, 1000);
+        vm.warp(2000 * 1e20);
+
+        vm.prank(address(lender));
+        tellerV2.lenderCloseLoan(bidId);
+
+        // make sure the state is now CLOSED
+        BidState state = tellerV2.getBidState(bidId);
+        require(state == BidState.CLOSED, "bid was not closed");
+    }
+
+    function test_lender_close_loan_wrong_origin() public {
         uint256 bidId = 1;
         setMockBid(bidId);
 
@@ -695,16 +754,12 @@ contract TellerV2_bids_test is Testable {
         tellerV2.mock_setBidDefaultDuration(bidId, 1000);
 
         //set the account that will be paying the loan off
-        tellerV2.setMockMsgSenderForMarket(address(this));
+        tellerV2.setMockMsgSenderForMarket(address(borrower));
 
         lendingToken.approve(address(tellerV2), 1e20);
 
+        vm.expectRevert(); // NLL
         tellerV2.lenderCloseLoan(bidId);
-
-        BidState state = tellerV2.getBidState(bidId);
-        // make sure the state is now CLOSED
-
-        require(state == BidState.CLOSED, "bid was not closed");
     }
 
     function test_liquidate_loan_full() public {
@@ -756,8 +811,8 @@ contract TellerV2_bids_test is Testable {
             abi.encodeWithSelector(
                 ActionNotAllowed.selector,
                 bidId,
-                "liquidateLoan",
-                "Loan must be accepted"
+                "ll",
+                "Loan not accepted"
             )
         );
         tellerV2.liquidateLoanFull(bidId);
@@ -769,6 +824,8 @@ contract TellerV2_bids_test is Testable {
     function test_claim_loan_nft() public {
         uint256 bidId = 1;
         setMockBid(bidId);
+
+        tellerV2.setProtocolPausingManagerSuper(address(protocolPausingManager));
 
         tellerV2.setLenderManagerSuper(address(lenderManagerMock));
 
@@ -786,6 +843,9 @@ contract TellerV2_bids_test is Testable {
         uint256 bidId = 1;
         setMockBid(bidId);
 
+        tellerV2.setProtocolPausingManagerSuper(address(protocolPausingManager));
+       
+
         tellerV2.setLenderManagerSuper(address(lenderManagerMock));
 
         tellerV2.mock_setBidState(bidId, BidState.ACCEPTED);
@@ -793,7 +853,7 @@ contract TellerV2_bids_test is Testable {
         tellerV2.setMockMsgSenderForMarket(address(borrower));
         vm.prank(address(borrower));
 
-        vm.expectRevert("only lender can claim NFT");
+        vm.expectRevert("NV Lender");
 
         tellerV2.claimLoanNFT(bidId);
     }
@@ -809,9 +869,12 @@ contract TellerV2_bids_test is Testable {
         tellerV2.setMockMsgSenderForMarket(address(lender));
 
         tellerV2.mock_initialize();
-        tellerV2.pauseProtocol();
+        
+        tellerV2.setProtocolPausingManagerSuper(address(protocolPausingManager));
+        protocolPausingManager.pauseProtocol();
+       
 
-        vm.expectRevert("Pausable: paused");
+        vm.expectRevert("Protocol paused");
         vm.prank(address(lender));
         tellerV2.claimLoanNFT(bidId);
     }

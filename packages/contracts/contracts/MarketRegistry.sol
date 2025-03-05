@@ -27,6 +27,7 @@ contract MarketRegistry is
     /** Constant Variables **/
 
     uint256 public constant CURRENT_CODE_VERSION = 8;
+     uint256 public constant MAX_MARKET_FEE_PERCENT = 1000;
 
     /* Storage Variables */
 
@@ -328,7 +329,7 @@ contract MarketRegistry is
      * @notice Removes a borrower from a market via delegated revocation.
      * @dev See {_revokeStakeholderViaDelegation}.
      */
-    function revokeLender(
+   /* function revokeLender(
         uint256 _marketId,
         address _lenderAddress,
         uint8 _v,
@@ -343,7 +344,7 @@ contract MarketRegistry is
             _r,
             _s
         );
-    }
+    } */
 
     /**
      * @notice Allows a lender to voluntarily leave a market.
@@ -408,7 +409,7 @@ contract MarketRegistry is
      * @notice Removes a borrower from a market via delegated revocation.
      * @dev See {_revokeStakeholderViaDelegation}.
      */
-    function revokeBorrower(
+   /* function revokeBorrower(
         uint256 _marketId,
         address _borrowerAddress,
         uint8 _v,
@@ -423,7 +424,7 @@ contract MarketRegistry is
             _r,
             _s
         );
-    }
+    }*/
 
     /**
      * @notice Allows a borrower to voluntarily leave a market.
@@ -637,8 +638,15 @@ contract MarketRegistry is
         public
         ownsMarket(_marketId)
     {
-        require(_newPercent >= 0 && _newPercent <= 10000, "invalid percent");
-        if (_newPercent != markets[_marketId].marketplaceFeePercent) {
+        
+        require(
+            _newPercent >= 0 && _newPercent <= MAX_MARKET_FEE_PERCENT,
+            "invalid fee percent"
+        );
+
+
+
+    if (_newPercent != markets[_marketId].marketplaceFeePercent) {
             markets[_marketId].marketplaceFeePercent = _newPercent;
             emit SetMarketFee(_marketId, _newPercent);
         }
@@ -1172,16 +1180,8 @@ contract MarketRegistry is
         //        tellerAS.revoke(uuid);
     }
 
-    /**
-     * @notice Removes a stakeholder from an market via delegated revocation.
-     * @param _marketId The market ID to remove the borrower from.
-     * @param _stakeholderAddress The address of the borrower to remove from the market.
-     * @param _isLender Boolean indicating if the stakeholder is a lender. Otherwise it is a borrower.
-     * @param _v Signature value
-     * @param _r Signature value
-     * @param _s Signature value
-     */
-    function _revokeStakeholderViaDelegation(
+     
+   /* function _revokeStakeholderViaDelegation(
         uint256 _marketId,
         address _stakeholderAddress,
         bool _isLender,
@@ -1197,7 +1197,7 @@ contract MarketRegistry is
         // NOTE: Disabling the call to revoke the attestation on EAS contracts
         //        address attestor = markets[_marketId].owner;
         //        tellerAS.revokeByDelegation(uuid, attestor, _v, _r, _s);
-    }
+    } */
 
     /**
      * @notice Removes a stakeholder (borrower/lender) from a market.

@@ -1,6 +1,6 @@
 {
   "name": "@teller-protocol/v2-contracts",
-  "version": "3.1.10",
+  "version": "3.1.31",
   "license": "MIT",
   "scripts": {
     "forge": "forge",
@@ -33,7 +33,8 @@
     "git:portal": "./scripts/git/portal.sh",
     "publish": "yarn npm publish",
     "clean": "yarn hh clean && ./scripts/clean.sh",
-    "prepack": "./scripts/prepack.sh",
+    "prepacklegacy": "./scripts/prepack.sh",
+    "prepack": "node ./scripts/prepack.js",
     "docs:build": "forge doc --out docs/",
     "docs:serve": "forge doc --serve --port 3000",
     "submodules:init": "git submodule update --init --recursive"

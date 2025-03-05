@@ -54,11 +54,13 @@ export function handleSubmittedBid(event: SubmittedBid): void {
   bid.transactionHash = event.transaction.hash.toHex();
   bid.borrowerAddress = event.params.borrower;
 
-  if (tellerV2Instance.try_getMetadataURI(event.params.bidId).reverted) {
-    bid.metadataURI = event.params.metadataURI.toHexString();
+  bid.metadataURI = event.params.metadataURI.toHexString();
+  
+  /*if (tellerV2Instance.try_getMetadataURI(event.params.bidId).reverted) {
+    
   } else {
     bid.metadataURI = tellerV2Instance.getMetadataURI(event.params.bidId);
-  }
+  }*/
 
   const lendingToken = loadToken(storedBid.value5.lendingToken);
   bid.lendingToken = lendingToken.id;

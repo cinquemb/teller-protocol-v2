@@ -15,13 +15,21 @@ typechain
 
 # secrets
 *.secret
+packages/contracts/.env
 
 # Subgraph
 packages/subgraph/config/config.json
-packages/subgraph/scripts/thegraph/api/config/*
+packages/subgraph/scripts/thegraph/api/config/cookies.json
+packages/subgraph/scripts/thegraph/api/config/studio.json
 packages/subgraph/subgraph.yaml
 packages/subgraph/generated
 packages/subgraph/abis/*
+
+# rust build artifacts 
+packages/substream-accounting/target/*
+packages/substream-accounting/build/*
+packages/subgraph-substreamed/target/*
+packages/subgraph-substreamed/build/*
 
 # dependencies
 /node_modules

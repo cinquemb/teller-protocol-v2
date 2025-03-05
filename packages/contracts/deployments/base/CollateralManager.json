@@ -445,6 +445,23 @@
     },
     {
       "type": "function",
+      "name": "lenderClaimCollateralWithRecipient",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "uint256",
+          "name": "_bidId"
+        },
+        {
+          "type": "address",
+          "name": "_collateralRecipient"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
       "name": "liquidateCollateral",
       "constant": false,
       "payable": false,
@@ -651,6 +668,31 @@
         }
       ],
       "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "withdrawDustTokens",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "uint256",
+          "name": "_bidId"
+        },
+        {
+          "type": "address",
+          "name": "_tokenAddress"
+        },
+        {
+          "type": "uint256",
+          "name": "_amount"
+        },
+        {
+          "type": "address",
+          "name": "_recipientAddress"
+        }
+      ],
+      "outputs": []
     }
   ],
   "transactionHash": "0x41d51d62022ac83764d6962796e3eb0ba50233b84ebd226a500f664de1223a3d",
@@ -660,6 +702,6 @@
     "blockHash": "0xabae061ff198e256011464be0acd37793c70705d0be512c402b3d8502941671a",
     "blockNumber": 2935376
   },
-  "numDeployments": 1,
+  "numDeployments": 2,
   "implementation": "0xbDF19f0cbe53BCaC880C214411bC183d1cD8A9F8"
 }

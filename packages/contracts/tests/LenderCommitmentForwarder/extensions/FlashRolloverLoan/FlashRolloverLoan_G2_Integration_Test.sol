@@ -1,6 +1,6 @@
 import { Testable } from "../../../Testable.sol";
 
-import { FlashRolloverLoan } from "../../../../contracts/LenderCommitmentForwarder/extensions/FlashRolloverLoan.sol";
+import { FlashRolloverLoan } from "../../../../contracts/LenderCommitmentForwarder/extensions/rollover/FlashRolloverLoan.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import "../../../../contracts/interfaces/IFlashRolloverLoan.sol";
@@ -26,8 +26,8 @@ import { LenderCommitmentForwarder_G3 } from "../../../../contracts/LenderCommit
 
 import { PaymentType, PaymentCycleType } from "../../../../contracts/libraries/V2Calculations.sol";
 
-import { FlashRolloverLoan_G1 } from "../../../../contracts/LenderCommitmentForwarder/extensions/FlashRolloverLoan_G1.sol";
-import { FlashRolloverLoan_G2 } from "../../../../contracts/LenderCommitmentForwarder/extensions/FlashRolloverLoan_G2.sol";
+import { FlashRolloverLoan_G1 } from "../../../../contracts/LenderCommitmentForwarder/extensions/rollover/FlashRolloverLoan_G1.sol";
+import { FlashRolloverLoan_G2 } from "../../../../contracts/LenderCommitmentForwarder/extensions/rollover/FlashRolloverLoan_G2.sol";
 
 import "lib/forge-std/src/console.sol";
 

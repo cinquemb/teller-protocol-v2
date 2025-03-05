@@ -455,6 +455,7 @@ FNDA:0,MarketRegistry._attestStakeholderViaDelegation
         marketRegistry.revokeStakeholder(marketId, address(lender), isLender);
     }
 
+/* 
     function test_revokeLenderViaDelegation() public {
         marketRegistry.revokeLender(marketId, address(lender), v, r, s);
 
@@ -474,6 +475,7 @@ FNDA:0,MarketRegistry._attestStakeholderViaDelegation
             "Revoke stakeholder verification was not called"
         );
     }
+    */
 
     function test_revokeStakeholderVerification() public {
         bool isLender = true;

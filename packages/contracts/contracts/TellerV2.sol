@@ -5,8 +5,8 @@ pragma solidity >=0.8.0 <0.9.0;
 import "./ProtocolFee.sol";
 import "./TellerV2Storage.sol";
 import "./TellerV2Context.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
+import "./pausing/HasProtocolPausingManager.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol"; 
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/StringsUpgradeable.sol";
 
@@ -17,11 +17,15 @@ import "./interfaces/ITellerV2.sol";
 import { Collateral } from "./interfaces/escrow/ICollateralEscrowV1.sol";
 import "./interfaces/IEscrowVault.sol";
 
+import { ILoanRepaymentCallbacks } from "./interfaces/ILoanRepaymentCallbacks.sol";
+import "./interfaces/ILoanRepaymentListener.sol";
+
 // Libraries
 import "@openzeppelin/contracts/utils/Address.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {SafeERC20} from "./openzeppelin/SafeERC20.sol";
 
 import "./libraries/NumbersLib.sol";
+import "./libraries/ExcessivelySafeCall.sol";
 
 import { V2Calculations, PaymentCycleType } from "./libraries/V2Calculations.sol";
 
@@ -44,9 +48,10 @@ error PaymentNotMinimum(uint256 bidId, uint256 payment, uint256 minimumOwed);
 
 contract TellerV2 is
     ITellerV2,
+    ILoanRepaymentCallbacks,
     OwnableUpgradeable,
     ProtocolFee,
-    PausableUpgradeable,
+    HasProtocolPausingManager,
     TellerV2Storage,
     TellerV2Context
 {
@@ -109,6 +114,12 @@ contract TellerV2 is
     event LoanRepaid(uint256 indexed bidId);
 
     /**
+     * @notice This event is emitted when a loan has been closed by a lender to claim collateral.
+     * @param bidId The id of the bid accepted.
+     */
+    event LoanClosed(uint256 indexed bidId);
+
+    /**
      * @notice This event is emitted when a loan has been fully repaid.
      * @param bidId The id of the bid/loan which was repaid.
      */
@@ -135,7 +146,7 @@ contract TellerV2 is
      */
     modifier pendingBid(uint256 _bidId, string memory _action) {
         if (bids[_bidId].state != BidState.PENDING) {
-            revert ActionNotAllowed(_bidId, _action, "Bid must be pending");
+            revert ActionNotAllowed(_bidId, _action, "Bid not pending");
         }
 
         _;
@@ -148,15 +159,16 @@ contract TellerV2 is
      */
     modifier acceptedLoan(uint256 _bidId, string memory _action) {
         if (bids[_bidId].state != BidState.ACCEPTED) {
-            revert ActionNotAllowed(_bidId, _action, "Loan must be accepted");
+            revert ActionNotAllowed(_bidId, _action, "Loan not accepted");
         }
 
         _;
     }
 
+
     /** Constant Variables **/
 
-    uint8 public constant CURRENT_CODE_VERSION = 9;
+    uint8 public constant CURRENT_CODE_VERSION = 10;
 
     uint32 public constant LIQUIDATION_DELAY = 86400; //ONE DAY IN SECONDS
 
@@ -174,6 +186,7 @@ contract TellerV2 is
      * @param _lenderCommitmentForwarder The address of the lender commitment forwarder contract.
      * @param _collateralManager The address of the collateral manager contracts.
      * @param _lenderManager The address of the lender manager contract for loans on the protocol.
+     * @param _protocolPausingManager The address of the pausing manager contract for the protocol.
      */
     function initialize(
         uint16 _protocolFee,
@@ -182,83 +195,73 @@ contract TellerV2 is
         address _lenderCommitmentForwarder,
         address _collateralManager,
         address _lenderManager,
-        address _escrowVault
+        address _escrowVault,
+        address _protocolPausingManager
     ) external initializer {
         __ProtocolFee_init(_protocolFee);
 
-        __Pausable_init();
+        //__Pausable_init();
 
         require(
             _lenderCommitmentForwarder.isContract(),
-            "LenderCommitmentForwarder must be a contract"
+            "LCF_ic"
         );
         lenderCommitmentForwarder = _lenderCommitmentForwarder;
 
         require(
             _marketRegistry.isContract(),
-            "MarketRegistry must be a contract"
+            "MR_ic"
         );
         marketRegistry = IMarketRegistry(_marketRegistry);
 
         require(
             _reputationManager.isContract(),
-            "ReputationManager must be a contract"
+            "RM_ic"
         );
         reputationManager = IReputationManager(_reputationManager);
 
         require(
             _collateralManager.isContract(),
-            "CollateralManager must be a contract"
+            "CM_ic"
         );
         collateralManager = ICollateralManager(_collateralManager);
 
-        _setLenderManager(_lenderManager);
-        _setEscrowVault(_escrowVault);
-    }
-
-    function setEscrowVault(address _escrowVault) external reinitializer(9) {
-        _setEscrowVault(_escrowVault);
-    }
-
-    function _setLenderManager(address _lenderManager)
-        internal
-        onlyInitializing
-    {
+       
+       
         require(
             _lenderManager.isContract(),
-            "LenderManager must be a contract"
+            "LM_ic"
         );
         lenderManager = ILenderManager(_lenderManager);
-    }
 
-    function _setEscrowVault(address _escrowVault) internal onlyInitializing {
-        require(_escrowVault.isContract(), "EscrowVault must be a contract");
+
+         
+
+         require(_escrowVault.isContract(), "EV_ic");
         escrowVault = IEscrowVault(_escrowVault);
+
+
+
+
+        _setProtocolPausingManager(_protocolPausingManager);
     }
 
-    /**
-     * @notice Gets the metadataURI for a bidId.
-     * @param _bidId The id of the bid to return the metadataURI for
-     * @return metadataURI_ The metadataURI for the bid, as a string.
-     */
-    function getMetadataURI(uint256 _bidId)
-        public
-        view
-        returns (string memory metadataURI_)
-    {
-        // Check uri mapping first
-        metadataURI_ = uris[_bidId];
-        // If the URI is not present in the mapping
-        if (
-            keccak256(abi.encodePacked(metadataURI_)) ==
-            0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470 // hardcoded constant of keccak256('')
-        ) {
-            // Return deprecated bytes32 uri as a string
-            uint256 convertedURI = uint256(bids[_bidId]._metadataURI);
-            metadataURI_ = StringsUpgradeable.toHexString(convertedURI, 32);
-        }
-    }
 
+    /* function setEscrowVault(address _escrowVault) external reinitializer(9) {
+        _setEscrowVault(_escrowVault);
+    }
+    */
+
+    
+     function setProtocolPausingManager(         
+        address _protocolPausingManager
+    ) external reinitializer(10) {
+
+         _setProtocolPausingManager(_protocolPausingManager);
+
+    }
+ 
+    
     /**
      * @notice Function for a borrower to create a bid for a loan without Collateral.
      * @param _lendingToken The lending token asset requested to be borrowed.
@@ -277,7 +280,7 @@ contract TellerV2 is
         uint16 _APR,
         string calldata _metadataURI,
         address _receiver
-    ) public override whenNotPaused returns (uint256 bidId_) {
+    ) public override whenProtocolNotPaused returns (uint256 bidId_) {
         bidId_ = _submitBid(
             _lendingToken,
             _marketplaceId,
@@ -309,7 +312,7 @@ contract TellerV2 is
         string calldata _metadataURI,
         address _receiver,
         Collateral[] calldata _collateralInfo
-    ) public override whenNotPaused returns (uint256 bidId_) {
+    ) public override whenProtocolNotPaused returns (uint256 bidId_) {
         bidId_ = _submitBid(
             _lendingToken,
             _marketplaceId,
@@ -327,7 +330,7 @@ contract TellerV2 is
 
         require(
             validation == true,
-            "Collateral balance could not be validated"
+            "C bal NV"
         );
     }
 
@@ -347,11 +350,11 @@ contract TellerV2 is
             sender
         );
 
-        require(isVerified, "Not verified borrower");
+        require(isVerified, "Borrower NV");
 
         require(
             marketRegistry.isMarketOpen(_marketplaceId),
-            "Market is not open"
+            "Mkt C"
         );
 
         // Set response bid ID.
@@ -421,8 +424,8 @@ contract TellerV2 is
         ) {
             revert ActionNotAllowed({
                 bidId: _bidId,
-                action: "cancelBid",
-                message: "Only the bid owner can cancel!"
+                action: "CB",
+                message: "Not bid owner"  //this is a TON of storage space
             });
         }
         _cancelBid(_bidId);
@@ -439,8 +442,8 @@ contract TellerV2 is
         ) {
             revert ActionNotAllowed({
                 bidId: _bidId,
-                action: "marketOwnerCancelBid",
-                message: "Only the market owner can cancel!"
+                action: "MOCB",
+                message: "Not market owner" //this is a TON of storage space 
             });
         }
         _cancelBid(_bidId);
@@ -454,7 +457,7 @@ contract TellerV2 is
     function _cancelBid(uint256 _bidId)
         internal
         virtual
-        pendingBid(_bidId, "cancelBid")
+        pendingBid(_bidId, "cb")
     {
         // Set the bid state to CANCELLED
         bids[_bidId].state = BidState.CANCELLED;
@@ -470,8 +473,8 @@ contract TellerV2 is
     function lenderAcceptBid(uint256 _bidId)
         external
         override
-        pendingBid(_bidId, "lenderAcceptBid")
-        whenNotPaused
+        pendingBid(_bidId, "lab")
+        whenProtocolNotPaused
         returns (
             uint256 amountToProtocol,
             uint256 amountToMarketplace,
@@ -487,14 +490,14 @@ contract TellerV2 is
             bid.marketplaceId,
             sender
         );
-        require(isVerified, "Not verified lender");
+        require(isVerified, "NV");
 
         require(
             !marketRegistry.isMarketClosed(bid.marketplaceId),
             "Market is closed"
         );
 
-        require(!isLoanExpired(_bidId), "Bid has expired");
+        require(!isLoanExpired(_bidId), "BE");
 
         // Set timestamp
         bid.loanDetails.acceptedTimestamp = uint32(block.timestamp);
@@ -523,7 +526,7 @@ contract TellerV2 is
         if (amountToProtocol > 0) {
             bid.loanDetails.lendingToken.safeTransferFrom(
                 sender,
-                owner(),
+                _getProtocolFeeRecipient(),
                 amountToProtocol
             );
         }
@@ -537,6 +540,12 @@ contract TellerV2 is
             );
         }
 
+//local stack scope
+{
+        uint256 balanceBefore = bid.loanDetails.lendingToken.balanceOf(
+            address(bid.receiver)
+        );  
+
         //transfer funds to borrower
         if (amountToBorrower > 0) {
             bid.loanDetails.lendingToken.safeTransferFrom(
@@ -545,6 +554,16 @@ contract TellerV2 is
                 amountToBorrower
             );
         }
+
+         uint256 balanceAfter = bid.loanDetails.lendingToken.balanceOf(
+                address(bid.receiver)
+         );
+
+        //used to revert for fee-on-transfer tokens as principal            
+         uint256 paymentAmountReceived = balanceAfter - balanceBefore;
+         require(amountToBorrower == paymentAmountReceived, "UT"); 
+}
+
 
         // Record volume filled by lenders
         lenderVolumeFilled[address(bid.loanDetails.lendingToken)][sender] += bid
@@ -566,14 +585,14 @@ contract TellerV2 is
 
     function claimLoanNFT(uint256 _bidId)
         external
-        acceptedLoan(_bidId, "claimLoanNFT")
-        whenNotPaused
+        acceptedLoan(_bidId, "cln")
+        whenProtocolNotPaused
     {
         // Retrieve bid
         Bid storage bid = bids[_bidId];
 
         address sender = _msgSenderForMarket(bid.marketplaceId);
-        require(sender == bid.lender, "only lender can claim NFT");
+        require(sender == bid.lender, "NV Lender");
 
         // set lender address to the lender manager so we know to check the owner of the NFT for the true lender
         bid.lender = address(USING_LENDER_MANAGER);
@@ -588,7 +607,7 @@ contract TellerV2 is
      */
     function repayLoanMinimum(uint256 _bidId)
         external
-        acceptedLoan(_bidId, "repayLoan")
+        acceptedLoan(_bidId, "rl")
     {
         (
             uint256 owedPrincipal,
@@ -597,7 +616,8 @@ contract TellerV2 is
         ) = V2Calculations.calculateAmountOwed(
                 bids[_bidId],
                 block.timestamp,
-                bidPaymentCycleType[_bidId]
+                _getBidPaymentCycleType(_bidId),
+                _getBidPaymentCycleDuration(_bidId)
             );
         _repayLoan(
             _bidId,
@@ -613,7 +633,7 @@ contract TellerV2 is
      */
     function repayLoanFull(uint256 _bidId)
         external
-        acceptedLoan(_bidId, "repayLoan")
+        acceptedLoan(_bidId, "rl")
     {
         _repayLoanFull(_bidId, true);
     }
@@ -626,7 +646,7 @@ contract TellerV2 is
      */
     function repayLoan(uint256 _bidId, uint256 _amount)
         external
-        acceptedLoan(_bidId, "repayLoan")
+        acceptedLoan(_bidId, "rl")
     {
         _repayLoanAtleastMinimum(_bidId, _amount, true);
     }
@@ -637,14 +657,14 @@ contract TellerV2 is
      */
     function repayLoanFullWithoutCollateralWithdraw(uint256 _bidId)
         external
-        acceptedLoan(_bidId, "repayLoan")
+        acceptedLoan(_bidId, "rl")
     {
         _repayLoanFull(_bidId, false);
     }
 
     function repayLoanWithoutCollateralWithdraw(uint256 _bidId, uint256 _amount)
         external
-        acceptedLoan(_bidId, "repayLoan")
+        acceptedLoan(_bidId, "rl")
     {
         _repayLoanAtleastMinimum(_bidId, _amount, false);
     }
@@ -654,7 +674,8 @@ contract TellerV2 is
             .calculateAmountOwed(
                 bids[_bidId],
                 block.timestamp,
-                bidPaymentCycleType[_bidId]
+                _getBidPaymentCycleType(_bidId),
+                _getBidPaymentCycleDuration(_bidId)
             );
         _repayLoan(
             _bidId,
@@ -676,7 +697,8 @@ contract TellerV2 is
         ) = V2Calculations.calculateAmountOwed(
                 bids[_bidId],
                 block.timestamp,
-                bidPaymentCycleType[_bidId]
+                _getBidPaymentCycleType(_bidId),
+                _getBidPaymentCycleDuration(_bidId)
             );
         uint256 minimumOwed = duePrincipal + interest;
 
@@ -693,34 +715,46 @@ contract TellerV2 is
         );
     }
 
-    /**
-     * @notice Lets the DAO/owner of the protocol implement an emergency stop mechanism.
-     */
-    function pauseProtocol() public virtual onlyOwner whenNotPaused {
-        _pause();
-    }
+ 
 
-    /**
-     * @notice Lets the DAO/owner of the protocol undo a previously implemented emergency stop.
-     */
-    function unpauseProtocol() public virtual onlyOwner whenPaused {
-        _unpause();
+
+    function lenderCloseLoan(uint256 _bidId)
+        external whenProtocolNotPaused whenLiquidationsNotPaused
+        acceptedLoan(_bidId, "lcc")
+    {
+        Bid storage bid = bids[_bidId];
+        address _collateralRecipient = getLoanLender(_bidId);
+
+        _lenderCloseLoanWithRecipient(_bidId, _collateralRecipient);
     }
 
     /**
      * @notice Function for lender to claim collateral for a defaulted loan. The only purpose of a CLOSED loan is to make collateral claimable by lender.
      * @param _bidId The id of the loan to set to CLOSED status.
      */
-    function lenderCloseLoan(uint256 _bidId)
-        external
-        acceptedLoan(_bidId, "lenderClaimCollateral")
-    {
-        require(isLoanDefaulted(_bidId), "Loan must be defaulted.");
+    function lenderCloseLoanWithRecipient(
+        uint256 _bidId,
+        address _collateralRecipient
+    ) external whenProtocolNotPaused whenLiquidationsNotPaused {
+        _lenderCloseLoanWithRecipient(_bidId, _collateralRecipient);
+    }
+
+    function _lenderCloseLoanWithRecipient(
+        uint256 _bidId,
+        address _collateralRecipient
+    ) internal acceptedLoan(_bidId, "lcc") {
+        require(isLoanDefaulted(_bidId), "ND");
 
         Bid storage bid = bids[_bidId];
         bid.state = BidState.CLOSED;
 
-        collateralManager.lenderClaimCollateral(_bidId);
+        address sender = _msgSenderForMarket(bid.marketplaceId);
+        require(sender == getLoanLender(_bidId), "NLL");
+
+      
+        collateralManager.lenderClaimCollateralWithRecipient(_bidId, _collateralRecipient);
+
+        emit LoanClosed(_bidId);
     }
 
     /**
@@ -728,10 +762,33 @@ contract TellerV2 is
      * @param _bidId The id of the loan to make the payment towards.
      */
     function liquidateLoanFull(uint256 _bidId)
-        external
-        acceptedLoan(_bidId, "liquidateLoan")
+        external whenProtocolNotPaused whenLiquidationsNotPaused
+        acceptedLoan(_bidId, "ll")
     {
-        require(isLoanLiquidateable(_bidId), "Loan must be liquidateable.");
+        Bid storage bid = bids[_bidId];
+
+        // If loan is backed by collateral, withdraw and send to the liquidator
+        address recipient = _msgSenderForMarket(bid.marketplaceId);
+
+        _liquidateLoanFull(_bidId, recipient);
+    }
+
+    function liquidateLoanFullWithRecipient(uint256 _bidId, address _recipient)
+        external whenProtocolNotPaused whenLiquidationsNotPaused
+        acceptedLoan(_bidId, "ll")
+    {
+        _liquidateLoanFull(_bidId, _recipient);
+    }
+
+    /**
+     * @notice Function for users to liquidate a defaulted loan.
+     * @param _bidId The id of the loan to make the payment towards.
+     */
+    function _liquidateLoanFull(uint256 _bidId, address _recipient)
+        internal
+        acceptedLoan(_bidId, "ll")
+    {
+        require(isLoanLiquidateable(_bidId), "NL");
 
         Bid storage bid = bids[_bidId];
 
@@ -742,7 +799,8 @@ contract TellerV2 is
             .calculateAmountOwed(
                 bid,
                 block.timestamp,
-                bidPaymentCycleType[_bidId]
+                _getBidPaymentCycleType(_bidId),
+                _getBidPaymentCycleDuration(_bidId)
             );
 
         //this sets the state to 'repaid'
@@ -753,9 +811,9 @@ contract TellerV2 is
             false
         );
 
-        // If loan is backed by collateral, withdraw and send to the liquidator
+        collateralManager.liquidateCollateral(_bidId, _recipient);
+
         address liquidator = _msgSenderForMarket(bid.marketplaceId);
-        collateralManager.liquidateCollateral(_bidId, liquidator);
 
         emit LoanLiquidated(_bidId, liquidator);
     }
@@ -793,7 +851,9 @@ contract TellerV2 is
             _borrowerBidsActive[bid.borrower].remove(_bidId);
 
             // If loan is is being liquidated and backed by collateral, withdraw and send to borrower
-            if (_shouldWithdrawCollateral) {
+            if (_shouldWithdrawCollateral) { 
+               
+                //   _getCollateralManagerForBid(_bidId).withdraw(_bidId);
                 collateralManager.withdraw(_bidId);
             }
 
@@ -802,12 +862,15 @@ contract TellerV2 is
             emit LoanRepayment(_bidId);
         }
 
-        _sendOrEscrowFunds(_bidId, paymentAmount); //send or escrow the funds
+        
 
         // update our mappings
         bid.loanDetails.totalRepaid.principal += _payment.principal;
         bid.loanDetails.totalRepaid.interest += _payment.interest;
         bid.loanDetails.lastRepaidTimestamp = uint32(block.timestamp);
+        
+        //perform this after state change to mitigate re-entrancy
+        _sendOrEscrowFunds(_bidId, _payment); //send or escrow the funds
 
         // If the loan is paid in full and has a mark, we should update the current reputation
         if (mark != RepMark.Good) {
@@ -815,54 +878,166 @@ contract TellerV2 is
         }
     }
 
-    function _sendOrEscrowFunds(uint256 _bidId, uint256 _paymentAmount)
-        internal
+
+    /*
+    If for some reason the lender cannot receive funds, should put those funds into the escrow 
+    so the loan can always be repaid and the borrower can get collateral out 
+ 
+
+    */
+    function _sendOrEscrowFunds(uint256 _bidId, Payment memory _payment)
+        internal virtual 
     {
         Bid storage bid = bids[_bidId];
         address lender = getLoanLender(_bidId);
 
-        try
-            //first try to pay directly
-            //have to use transfer from  (not safe transfer from) for try/catch statement
-            //dont try to use any more than 100k gas for this xfer
-            bid.loanDetails.lendingToken.transferFrom{ gas: 100000 }(
-                _msgSenderForMarket(bid.marketplaceId),
-                lender,
-                _paymentAmount
-            )
-        {} catch {
-            address sender = _msgSenderForMarket(bid.marketplaceId);
+        uint256 _paymentAmount = _payment.principal + _payment.interest;
 
-            uint256 balanceBefore = bid.loanDetails.lendingToken.balanceOf(
-                address(this)
-            );
+            //USER STORY:  Should function properly with USDT and USDC and WETH for sure 
 
-            //if unable, pay to escrow
-            bid.loanDetails.lendingToken.safeTransferFrom(
-                sender,
-                address(this),
-                _paymentAmount
-            );
+            //USER STORY  :  if the lender cannot receive funds for some reason (denylisted) 
+            //then we will try to send the funds to the EscrowContract bc we want the borrower to be able to get back their collateral ! 
+            // i.e.  lender not being able to recieve funds should STILL allow repayment to succeed ! 
 
-            uint256 balanceAfter = bid.loanDetails.lendingToken.balanceOf(
-                address(this)
-            );
+          
+              bool transferSuccess = safeTransferFromERC20Custom( 
+                    address(bid.loanDetails.lendingToken),
+                   _msgSenderForMarket(bid.marketplaceId) , //from
+                   lender, //to
+                    _paymentAmount // amount                 
+             );
+                  
+            if  (!transferSuccess) {  
+                //could not send funds due to an issue with lender (denylisted?) so we are going to try and send the funds to the
+                // escrow wallet FOR the lender to be able to retrieve at a later time when they are no longer denylisted by the token  
+            
+                address sender = _msgSenderForMarket(bid.marketplaceId);
 
-            //used for fee-on-send tokens
-            uint256 paymentAmountReceived = balanceAfter - balanceBefore;
+                // fee on transfer tokens are not supported in the lenderAcceptBid step
 
-            bid.loanDetails.lendingToken.approve(
-                address(escrowVault),
-                paymentAmountReceived
-            );
+                //if unable, pay to escrow
+                bid.loanDetails.lendingToken.safeTransferFrom(
+                    sender,
+                    address(this),
+                    _paymentAmount
+                ); 
 
-            IEscrowVault(escrowVault).deposit(
-                lender,
-                address(bid.loanDetails.lendingToken),
-                paymentAmountReceived
-            );
+                bid.loanDetails.lendingToken.forceApprove(
+                    address(escrowVault),
+                    _paymentAmount
+                );
+
+                IEscrowVault(escrowVault).deposit(
+                    lender,
+                    address(bid.loanDetails.lendingToken),
+                    _paymentAmount
+                );
+
+
+            }
+
+         address loanRepaymentListener = repaymentListenerForBid[_bidId];
+
+        if (loanRepaymentListener != address(0)) {
+            
+         
+         
+
+            //make sure the external call will not fail due to out-of-gas
+            require(gasleft() >= 80000, "NR gas"); //fixes the 63/64 remaining issue
+
+            bool repayCallbackSucccess = safeRepayLoanCallback(
+                   loanRepaymentListener,
+                   _bidId,
+                   _msgSenderForMarket(bid.marketplaceId),
+                   _payment.principal,
+                   _payment.interest
+             ); 
+
+
         }
     }
+
+
+    function safeRepayLoanCallback(
+        address _loanRepaymentListener,
+        uint256 _bidId,
+        address _sender,
+        uint256 _principal,
+        uint256 _interest
+    ) internal virtual returns (bool) {
+
+        //The EVM will only forward 63/64 of the remaining gas to the external call to _loanRepaymentListener.
+
+        ( bool callSuccess, bytes memory callReturnData ) = ExcessivelySafeCall.excessivelySafeCall(
+                address(_loanRepaymentListener),
+                80000, //max gas 
+                0,  //value (eth) to send in call
+                1000, //max return data size  
+                abi.encodeWithSelector(
+                    ILoanRepaymentListener
+                        .repayLoanCallback
+                        .selector,
+                    _bidId,
+                    _sender,
+                    _principal,
+                    _interest 
+                )  
+           );
+
+
+        return callSuccess ;
+    }
+
+    /*
+      A try/catch pattern for safeTransferERC20 that helps support standard ERC20 tokens and non-standard ones like USDT 
+
+      @notice  If the token address is an EOA, callSuccess will always be true so token address should always be a contract. 
+    */
+    function safeTransferFromERC20Custom(
+
+        address _token,
+        address _from,
+        address _to,
+        uint256 _amount 
+
+    ) internal virtual returns (bool success) {
+
+        //https://github.com/nomad-xyz/ExcessivelySafeCall
+        //this works similarly to a try catch -- an inner revert doesnt revert us but will make callSuccess be false. 
+         ( bool callSuccess, bytes memory callReturnData ) = ExcessivelySafeCall.excessivelySafeCall(
+                address(_token),
+                100000, //max gas 
+                0,  //value (eth) to send in call
+                1000, //max return data size  
+                abi.encodeWithSelector(
+                    IERC20
+                        .transferFrom
+                        .selector,
+                    _from,
+                    _to,
+                    _amount
+                )  
+           );
+    
+
+             //If the token returns data, make sure it returns true. This helps us with USDT which may revert but never returns a bool.
+            bool dataIsSuccess = true;
+            if (callReturnData.length >= 32) {
+                assembly {
+                    // Load the first 32 bytes of the return data (assuming it's a bool)
+                    let result := mload(add(callReturnData, 0x20))
+                    // Check if the result equals `true` (1)
+                    dataIsSuccess := eq(result, 1)
+                }
+            }
+
+           // ensures that both callSuccess (the low-level call didn't fail) and dataIsSuccess (the function returned true if it returned something).
+            return callSuccess && dataIsSuccess; 
+
+
+    }
+
 
     /**
      * @notice Calculates the total amount owed for a loan bid at a specific timestamp.
@@ -881,7 +1056,13 @@ contract TellerV2 is
         ) return owed;
 
         (uint256 owedPrincipal, , uint256 interest) = V2Calculations
-            .calculateAmountOwed(bid, _timestamp, bidPaymentCycleType[_bidId]);
+            .calculateAmountOwed(
+                bid,
+                _timestamp,
+                _getBidPaymentCycleType(_bidId),
+                _getBidPaymentCycleDuration(_bidId)
+            );
+
         owed.principal = owedPrincipal;
         owed.interest = interest;
     }
@@ -903,7 +1084,12 @@ contract TellerV2 is
         ) return due;
 
         (, uint256 duePrincipal, uint256 interest) = V2Calculations
-            .calculateAmountOwed(bid, _timestamp, bidPaymentCycleType[_bidId]);
+            .calculateAmountOwed(
+                bid,
+                _timestamp,
+                _getBidPaymentCycleType(_bidId),
+                _getBidPaymentCycleDuration(_bidId)
+            );
         due.principal = duePrincipal;
         due.interest = interest;
     }
@@ -985,13 +1171,15 @@ contract TellerV2 is
 
         uint32 defaultDuration = bidDefaultDuration[_bidId];
 
-        if (defaultDuration == 0) return false;
-
         uint32 dueDate = calculateNextDueDate(_bidId);
 
         return
             uint32(block.timestamp) >
             dueDate + defaultDuration + _additionalDelay;
+    }
+
+    function getEscrowVault() external view returns(address){
+        return address(escrowVault);
     }
 
     function getBidState(uint256 _bidId)
@@ -1118,6 +1306,115 @@ contract TellerV2 is
         lastRepaidTimestamp = V2Calculations.lastRepaidTimestamp(bids[_bidId]);
         bidState = bid.state;
     }
+
+    // Additions for lender groups
+
+    function getLoanDefaultTimestamp(uint256 _bidId)
+        public
+        view
+        returns (uint256)
+    {
+        Bid storage bid = bids[_bidId];
+
+        uint32 defaultDuration = _getBidDefaultDuration(_bidId);
+
+        uint32 dueDate = calculateNextDueDate(_bidId);
+
+        return dueDate + defaultDuration;
+    }
+ 
+    function setRepaymentListenerForBid(uint256 _bidId, address _listener) external {
+        uint256 codeSize;
+        assembly {
+            codeSize := extcodesize(_listener) 
+        }
+        require(codeSize > 0, "Not a contract");
+        address sender = _msgSenderForMarket(bids[_bidId].marketplaceId);
+
+        require(
+            sender == getLoanLender(_bidId),
+            "Not lender"
+        );
+
+        repaymentListenerForBid[_bidId] = _listener;
+     }
+
+
+
+
+    function getRepaymentListenerForBid(uint256 _bidId)
+        external
+        view
+        returns (address)
+    {
+        return repaymentListenerForBid[_bidId];
+    }
+
+    // ----------
+
+    function _getBidPaymentCycleType(uint256 _bidId)
+        internal
+        view
+        returns (PaymentCycleType)
+    {
+         
+
+        return bidPaymentCycleType[_bidId];
+    }
+
+    function _getBidPaymentCycleDuration(uint256 _bidId)
+        internal
+        view
+        returns (uint32)
+    {
+        
+
+        Bid storage bid = bids[_bidId];
+
+        return bid.terms.paymentCycle;
+    }
+
+    function _getBidDefaultDuration(uint256 _bidId)
+        internal
+        view
+        returns (uint32)
+    {
+       
+
+        return bidDefaultDuration[_bidId];
+    }
+
+
+
+    function _getProtocolFeeRecipient()
+    internal view
+    returns (address) {
+
+        if (protocolFeeRecipient == address(0x0)){
+            return owner();
+        }else {
+            return protocolFeeRecipient; 
+        }
+
+    }
+
+    function getProtocolFeeRecipient()
+    external view
+    returns (address) {
+
+       return _getProtocolFeeRecipient();
+
+    }
+
+    function setProtocolFeeRecipient(address _recipient)
+    external onlyOwner
+      {
+
+      protocolFeeRecipient = _recipient;
+
+    }
+
+    // -----
 
     /** OpenZeppelin Override Functions **/
 

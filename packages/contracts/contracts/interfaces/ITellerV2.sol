@@ -153,4 +153,26 @@ interface ITellerV2 {
         external
         view
         returns (Payment memory due);
+
+    function lenderCloseLoan(uint256 _bidId) external;
+
+    function lenderCloseLoanWithRecipient(uint256 _bidId, address _recipient)
+        external;
+
+    function liquidateLoanFull(uint256 _bidId) external;
+
+    function liquidateLoanFullWithRecipient(uint256 _bidId, address _recipient)
+        external;
+
+    function getLoanDefaultTimestamp(uint256 _bidId)
+        external
+        view
+        returns (uint256);
+
+
+    function getEscrowVault() external view returns(address);
+    function getProtocolFeeRecipient () external view returns(address);
+
+
+   // function isPauser(address _account) external view returns(bool);
 }

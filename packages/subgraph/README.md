@@ -2,6 +2,92 @@
 
 # Teller Protocol Subgraph 
 
+
+## NEW DOCS 
+
+
+ 1. build the subgraph using the graph-cli 
+
+ ```
+
+yarn build 
+ ```
+
+
+
+2. set network config ????
+
+```
+ await setNetworkConfig(subgraph.network, config);
+
+```
+
+3.  make sure code is copied over 
+
+```
+ yarn contracts export --network base
+```
+
+ 
+ 4. run handlebars which will build the final  subgraph.yaml file ! 
+
+```
+ yarn hbs -D ./config/${subgraph.network}.json ./src/subgraph.handlebars -o . -e yaml
+ 
+ yarn hbs -D ./config/arbitrum-one.json ./src/subgraph.handlebars -o . -e yaml
+ 
+  yarn hbs -D ./config/base.json ./src/subgraph.handlebars -o . -e yaml
+
+```
+ 
+
+
+4.1.  ( make sure graft base is OK -- in subgraph / config {{ networkname.json }} )
+
+
+
+5. auth 
+
+graph auth 
+
+
+
+6. deploy ! 
+
+
+ graph deploy   tellerv2-arbitrum --version-label 0.4.17
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ## OLD DOCS  ----
+
+
 # Setup commands
 
 **note: First make sure that docker is installed and running locally*

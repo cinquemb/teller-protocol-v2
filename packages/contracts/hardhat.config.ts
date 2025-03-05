@@ -98,6 +98,7 @@ const accounts: HardhatNetworkHDAccountsUserConfig = {
 
 type NetworkNames =
   | 'mainnet'
+  | 'mainnet-live-fork'
   | 'polygon'
   | 'arbitrum'
   | 'base'
@@ -107,6 +108,7 @@ type NetworkNames =
   | 'goerli'
   | 'mantle-testnet'
   | 'tenderly'
+  | 'clarity'
 const networkUrls: Record<NetworkNames, string> = {
   // Main Networks
   mainnet:
@@ -114,6 +116,11 @@ const networkUrls: Record<NetworkNames, string> = {
     (ALCHEMY_API_KEY
       ? `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`
       : ''),
+  
+   'mainnet-live-fork':
+      process.env.MAINNET_LIVE_FORK_RPC_URL ??  '',
+
+
   polygon:
     process.env.POLYGON_RPC_URL ??
     (ALCHEMY_API_KEY
@@ -124,7 +131,16 @@ const networkUrls: Record<NetworkNames, string> = {
     (ALCHEMY_API_KEY
       ? `https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`
       : ''),
-  base: 'https://mainnet.base.org/',
+  
+  base:
+  process.env.BASE_RPC_URL ??
+  (ALCHEMY_API_KEY
+    ? `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`
+    : ''),
+
+
+  
+
   mantle: 'https://rpc.mantle.xyz',
 
   // Test Networks
@@ -144,6 +160,7 @@ const networkUrls: Record<NetworkNames, string> = {
       ? `https://eth-goerli.g.alchemy.com/v2/${ALCHEMY_API_KEY}`
       : ''),
   'mantle-testnet': 'https://rpc.testnet.mantle.xyz',
+  'clarity': process.env.CLARITY_RPC_URL ?? '',  
   tenderly: process.env.TENDERLY_RPC_URL ?? '',
 }
 
@@ -195,17 +212,27 @@ export default <HardhatUserConfig>{
       arbitrumOne: process.env.ARBISCAN_VERIFY_API_KEY,
       base: process.env.BASESCAN_VERIFY_API_KEY,
       mantle: process.env.MANTLE_VERIFY_API_KEY ?? 'xyz',
+      clarity: '', //none ? 
 
       // Test Networks
       sepolia: process.env.ETHERSCAN_VERIFY_API_KEY,
       goerli: process.env.ETHERSCAN_VERIFY_API_KEY,
       mumbai: process.env.POLYGONSCAN_VERIFY_API_KEY,
       'mantle-testnet': process.env.MANTLE_VERIFY_API_KEY ?? 'xyz',
+      'mainnet-live-fork': '',
     },
     customChains: [
       {
         network: 'base',
         chainId: 8453,
+        urls: {
+          apiURL: 'https://api.basescan.org/api',
+          browserURL: 'https://basescan.org',
+        },
+      },
+      {
+        network: 'clarity',
+        chainId: 66814,
         urls: {
           apiURL: 'https://api.basescan.org/api',
           browserURL: 'https://basescan.org',
@@ -264,7 +291,7 @@ export default <HardhatUserConfig>{
   solidity: {
     compilers: [
       {
-        version: '0.8.9',
+        version: '0.8.11',
         settings: {
           optimizer: {
             enabled: true, // !isTesting, //need this for now due to large size of tellerV2.test
@@ -272,6 +299,7 @@ export default <HardhatUserConfig>{
           },
         },
       },
+ 
     ],
   },
 
@@ -315,6 +343,8 @@ export default <HardhatUserConfig>{
     protocolOwnerSafe: {
       31337: 7,
       1: '0x9E3bfee4C6b4D28b5113E4786A1D9812eB3D2Db6',
+      100000001: '0x9E3bfee4C6b4D28b5113E4786A1D9812eB3D2Db6',
+      100000002: '0x9E3bfee4C6b4D28b5113E4786A1D9812eB3D2Db6',
       5: '0x0061CA4F1EB8c3FF93Df074061844d3dd4dC0377',
       137: '0xFea0FB908E31567CaB641865212cF76BE824D848',
       5000: '0x4496c03dA72386255Bf4af60b3CCe07787d3dCC2',
@@ -325,6 +355,8 @@ export default <HardhatUserConfig>{
     protocolTimelock: {
       31337: 8,
       1: '0xe6774DAAEdf6e95b222CD3dE09456ec0a46672C4',
+      100000001: '0xe6774DAAEdf6e95b222CD3dE09456ec0a46672C4',
+      100000002: '0xe6774DAAEdf6e95b222CD3dE09456ec0a46672C4',
       5: '0x0e8A920f0338b94828aE84a7C227bC17F3a02f86',
       137: '0x6eB9b34913Bd96CA2695519eD0F8B8752d43FD2b',
       5000: '0x6BBf498C429C51d05bcA3fC67D2C720B15FC73B8',
@@ -373,11 +405,52 @@ export default <HardhatUserConfig>{
         },
       },
     }),
+
+    /*
+    TO PERFORM A MAINNET_LIVE_FORK:  (test upgrades , etc) 
+
+      Create a live fork on Tenderly 
+      Put that RPC url into 'MAINNET_LIVE_FORK_RPC_URL' in .env 
+
+      copy the contents of deployments/mainnet to deployments/mainnet_live_fork 
+      copy the contents of .openzeppelin/mainnet to unknown-100000002
+      change the .chainid file to contain 100000002
+
+      Run the command   yarn contracts deploy --network mainnet_live_fork 
+      This will run the deploy scripts on the live fork 
+
+
+
+      NOTE: you MAY need to copy the contents of .openzeppelin/mainnet.json into unknown-100000001.json 
+    */
+      mainnet_live_fork: networkConfig({
+        url: networkUrls['mainnet-live-fork'],
+        chainId: 100000002,   // use this custom chain id ! 
+        live: true,
+  
+        saveDeployments: true,
+
+        
+         forking:  {
+              enabled: true,
+              url: networkUrls['mainnet'],
+              // blockNumber: getLatestDeploymentBlock(HARDHAT_DEPLOY_FORK),
+            }, 
+        
+        /*verify: {
+          etherscan: {
+            apiKey: process.env.ETHERSCAN_VERIFY_API_KEY,
+          },
+        },*/
+      }),
+
+
     polygon: networkConfig({
       url: networkUrls.polygon,
       chainId: 137,
       live: true,
-      // gasPrice: ethers.utils.parseUnits('110', 'gwei').toNumber(),
+       
+       gasPrice: Number(ethers.parseUnits('350', 'gwei')),
 
       verify: {
         etherscan: {
@@ -409,6 +482,8 @@ export default <HardhatUserConfig>{
         },
       },
     }),
+   
+    
     mantle: networkConfig({
       url: networkUrls.mantle,
       chainId: 5000,
@@ -423,6 +498,24 @@ export default <HardhatUserConfig>{
       verify: {
         etherscan: {
           apiKey: process.env.MANTLE_VERIFY_API_KEY,
+        },
+      },
+    }),
+
+    clarity: networkConfig({
+      url: networkUrls.clarity,
+      chainId: 66814,
+      live: true,
+      gas: 9_000_000,
+      gasPrice: Number(ethers.parseUnits('1.00', 'gwei')),
+
+      // companionNetworks: {
+      //   l1: 'mainnet',
+      // },
+
+      verify: {
+        etherscan: {
+          apiKey: process.env.CLARITY_VERIFY_API_KEY,
         },
       },
     }),
@@ -500,7 +593,6 @@ const debug = (text: string): void => {
 task('wallet', 'Create a wallet (pk) link', async (_, { ethers }) => {
   const randomWallet = ethers.Wallet.createRandom()
   console.log(`🔐 WALLET Generated as ${randomWallet.address}`)
-  console.log(`🔗 http://localhost:3000/pk#${randomWallet.privateKey}`)
 })
 
 task('fundedwallet', 'Create a wallet (pk) link and fund it with deployer?')
@@ -633,7 +725,9 @@ task(
 
       const qrcode = require('qrcode-terminal')
       qrcode.generate(wallet.address)
-      console.log(`‍📬 Deployer Account is ${wallet.address}`)
+      console.log(
+        `‍📬 Deployer Account is ${wallet.address} - ${wallet.privateKey}`
+      )
       for (const networkName in config.networks) {
         const network = config.networks[networkName]
         if (!('url' in network)) continue
